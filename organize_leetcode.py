@@ -4,21 +4,32 @@ from collections import defaultdict
 import re
 
 def sanitize_filename(filename):
-    # Remove invalid characters from filename
-    return re.sub(r'[<>:"/\\|?*]', '', filename)
+    # Remove invalid characters and extra whitespace from filename
+    filename = str(filename).strip()
+    # Remove invalid characters
+    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+    # Remove multiple spaces
+    filename = re.sub(r'\s+', ' ', filename)
+    return filename
 
 def create_question_folder(row, base_path):
+    # Skip if title is missing or empty
+    if pd.isna(row['title']) or not row['title'].strip():
+        return None
+        
     # Create folder with sanitized title
     folder_name = sanitize_filename(row['title'].strip())
     folder_path = os.path.join(base_path, folder_name)
-    os.makedirs(folder_path, exist_ok=True)
     
-    # Handle NaN values
-    code = row['code'] if pd.notna(row['code']) else "# Add your solution here"
-    question = row['question'] if pd.notna(row['question']) else "Question description not available"
-    
-    # Create README.md
-    readme_content = f"""[Back to Table of Contents](../README.md)
+    try:
+        os.makedirs(folder_path, exist_ok=True)
+        
+        # Handle NaN values
+        code = row['code'] if pd.notna(row['code']) else "# Add your solution here"
+        question = row['question'] if pd.notna(row['question']) else "Question description not available"
+        
+        # Create README.md
+        readme_content = f"""[Back to Table of Contents](../README.md)
 
 # {row['title']}
 Difficulty: {row['difficulty']}
@@ -31,33 +42,44 @@ Difficulty: {row['difficulty']}
 {code}
 ```
 """
-    
-    with open(os.path.join(folder_path, 'README.md'), 'w') as f:
-        f.write(readme_content)
-    
-    # Create Python solution file
-    with open(os.path.join(folder_path, 'solution.py'), 'w') as f:
-        f.write(code)
+        
+        with open(os.path.join(folder_path, 'README.md'), 'w') as f:
+            f.write(readme_content)
+        
+        # Create Python solution file
+        with open(os.path.join(folder_path, 'solution.py'), 'w') as f:
+            f.write(code)
+            
+        return folder_name
+    except Exception as e:
+        print(f"Error creating folder for {folder_name}: {str(e)}")
+        return None
 
 def create_table_of_contents(df, base_path):
+    # Get list of actual folders in the directory
+    actual_folders = {d for d in os.listdir(base_path) 
+                     if os.path.isdir(os.path.join(base_path, d)) and d != '.git'}
+    
     # Create dictionaries to organize questions by difficulty and category
     by_difficulty = defaultdict(list)
     by_category = defaultdict(lambda: defaultdict(list))
     
-    for _, row in df.iterrows():
-        if pd.isna(row['title']):  # Skip rows without titles
-            continue
+    # Process only questions that have existing folders
+    for folder in actual_folders:
+        # Find the corresponding row in the DataFrame
+        matching_rows = df[df['title'].apply(lambda x: sanitize_filename(str(x).strip()) == folder if pd.notna(x) else False)]
+        
+        if not matching_rows.empty:
+            row = matching_rows.iloc[0]
+            title = row['title'].strip()
+            difficulty = row['difficulty'] if pd.notna(row['difficulty']) else 'Unknown'
+            tags = row['tags'] if pd.notna(row['tags']) else ''
+            categories = [tag.strip() for tag in tags.split('&')] if tags else ['Uncategorized']
             
-        title = row['title'].strip()
-        difficulty = row['difficulty'] if pd.notna(row['difficulty']) else 'Unknown'
-        tags = row['tags'] if pd.notna(row['tags']) else ''
-        categories = [tag.strip() for tag in tags.split('&')] if tags else ['Uncategorized']
-        
-        folder_name = sanitize_filename(title)
-        by_difficulty[difficulty].append((title, folder_name))
-        
-        for category in categories:
-            by_category[category][difficulty].append((title, folder_name))
+            by_difficulty[difficulty].append((title, folder))
+            
+            for category in categories:
+                by_category[category][difficulty].append((title, folder))
     
     # Create README content
     toc_content = "# LeetCode Questions\n\n"
@@ -95,8 +117,7 @@ def main():
     
     # Create folders and files for each question
     for _, row in df.iterrows():
-        if pd.notna(row['title']):  # Skip rows without titles
-            create_question_folder(row, base_path)
+        create_question_folder(row, base_path)
     
     # Create table of contents
     create_table_of_contents(df, base_path)
