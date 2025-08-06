@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from collections import defaultdict
 import re
+import shutil
 
 def sanitize_filename(filename):
     # Remove invalid characters and extra whitespace from filename
@@ -20,14 +21,14 @@ def encode_path_for_markdown(path):
     # Join back with forward slashes
     return '/'.join(encoded_parts)
 
-def create_question_folder(row, base_path):
+def create_question_folder(row, base_path, questions_dir):
     # Skip if title is missing or empty
     if pd.isna(row['title']) or not row['title'].strip():
         return None
         
     # Create folder with sanitized title
     folder_name = sanitize_filename(row['title'].strip())
-    folder_path = os.path.join(base_path, folder_name)
+    folder_path = os.path.join(questions_dir, folder_name)
     
     try:
         os.makedirs(folder_path, exist_ok=True)
@@ -37,7 +38,7 @@ def create_question_folder(row, base_path):
         question = row['question'] if pd.notna(row['question']) else "Question description not available"
         
         # Create README.md
-        readme_content = f"""[Back to Table of Contents](../README.md)
+        readme_content = f"""[Back to Table of Contents](../../README.md)
 
 # {row['title']}
 Difficulty: {row['difficulty']}
@@ -63,10 +64,10 @@ Difficulty: {row['difficulty']}
         print(f"Error creating folder for {folder_name}: {str(e)}")
         return None
 
-def create_table_of_contents(df, base_path):
-    # Get list of actual folders in the directory
-    actual_folders = {d for d in os.listdir(base_path) 
-                     if os.path.isdir(os.path.join(base_path, d)) and d != '.git'}
+def create_table_of_contents(df, base_path, questions_dir):
+    # Get list of actual folders in the questions directory
+    actual_folders = {d for d in os.listdir(questions_dir) 
+                     if os.path.isdir(os.path.join(questions_dir, d))}
     
     # Create dictionaries to organize questions by difficulty and category
     by_difficulty = defaultdict(list)
@@ -108,7 +109,7 @@ def create_table_of_contents(df, base_path):
         if difficulty in by_difficulty:
             toc_content += f"### {difficulty}\n\n"
             for title, folder in sorted(by_difficulty[difficulty]):
-                encoded_path = encode_path_for_markdown(f"./{folder}/README.md")
+                encoded_path = encode_path_for_markdown(f"./Questions/{folder}/README.md")
                 toc_content += f"- [{title}]({encoded_path})\n"
             toc_content += "\n"
     
@@ -120,7 +121,7 @@ def create_table_of_contents(df, base_path):
             if difficulty in by_category[category]:
                 toc_content += f"#### {difficulty}\n\n"
                 for title, folder in sorted(by_category[category][difficulty]):
-                    encoded_path = encode_path_for_markdown(f"./{folder}/README.md")
+                    encoded_path = encode_path_for_markdown(f"./Questions/{folder}/README.md")
                     toc_content += f"- [{title}]({encoded_path})\n"
                 toc_content += "\n"
     
@@ -132,15 +133,27 @@ def main():
     # Get the current directory
     base_path = os.path.dirname(os.path.abspath(__file__))
     
+    # Create Questions directory
+    questions_dir = os.path.join(base_path, 'Questions')
+    os.makedirs(questions_dir, exist_ok=True)
+    
+    # Move existing question folders to Questions directory
+    for item in os.listdir(base_path):
+        item_path = os.path.join(base_path, item)
+        if os.path.isdir(item_path) and item != '.git' and item != 'Questions':
+            target_path = os.path.join(questions_dir, item)
+            if not os.path.exists(target_path):
+                shutil.move(item_path, target_path)
+    
     # Read the CSV file
     df = pd.read_csv('leetcode_template_with_question.csv')
     
     # Create folders and files for each question
     for _, row in df.iterrows():
-        create_question_folder(row, base_path)
+        create_question_folder(row, base_path, questions_dir)
     
     # Create table of contents
-    create_table_of_contents(df, base_path)
+    create_table_of_contents(df, base_path, questions_dir)
 
 if __name__ == "__main__":
     main() 
