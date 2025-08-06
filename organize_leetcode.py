@@ -12,6 +12,14 @@ def sanitize_filename(filename):
     filename = re.sub(r'\s+', ' ', filename)
     return filename
 
+def encode_path_for_markdown(path):
+    # Split the path into directory parts
+    parts = path.split('/')
+    # Replace spaces with %20 in each part
+    encoded_parts = [part.replace(' ', '%20') for part in parts]
+    # Join back with forward slashes
+    return '/'.join(encoded_parts)
+
 def create_question_folder(row, base_path):
     # Skip if title is missing or empty
     if pd.isna(row['title']) or not row['title'].strip():
@@ -64,22 +72,32 @@ def create_table_of_contents(df, base_path):
     by_difficulty = defaultdict(list)
     by_category = defaultdict(lambda: defaultdict(list))
     
-    # Process only questions that have existing folders
+    # Create a mapping of sanitized titles to actual folder names
+    folder_map = {}
     for folder in actual_folders:
-        # Find the corresponding row in the DataFrame
-        matching_rows = df[df['title'].apply(lambda x: sanitize_filename(str(x).strip()) == folder if pd.notna(x) else False)]
+        sanitized = sanitize_filename(folder)
+        folder_map[sanitized] = folder
+    
+    for _, row in df.iterrows():
+        if pd.isna(row['title']):  # Skip rows without titles
+            continue
+            
+        title = row['title'].strip()
+        sanitized_folder = sanitize_filename(title)
         
-        if not matching_rows.empty:
-            row = matching_rows.iloc[0]
-            title = row['title'].strip()
-            difficulty = row['difficulty'] if pd.notna(row['difficulty']) else 'Unknown'
-            tags = row['tags'] if pd.notna(row['tags']) else ''
-            categories = [tag.strip() for tag in tags.split('&')] if tags else ['Uncategorized']
+        # Only include questions whose folders actually exist
+        if sanitized_folder not in folder_map:
+            continue
             
-            by_difficulty[difficulty].append((title, folder))
-            
-            for category in categories:
-                by_category[category][difficulty].append((title, folder))
+        actual_folder = folder_map[sanitized_folder]
+        difficulty = row['difficulty'] if pd.notna(row['difficulty']) else 'Unknown'
+        tags = row['tags'] if pd.notna(row['tags']) else ''
+        categories = [tag.strip() for tag in tags.split('&')] if tags else ['Uncategorized']
+        
+        by_difficulty[difficulty].append((title, actual_folder))
+        
+        for category in categories:
+            by_category[category][difficulty].append((title, actual_folder))
     
     # Create README content
     toc_content = "# LeetCode Questions\n\n"
@@ -90,7 +108,8 @@ def create_table_of_contents(df, base_path):
         if difficulty in by_difficulty:
             toc_content += f"### {difficulty}\n\n"
             for title, folder in sorted(by_difficulty[difficulty]):
-                toc_content += f"- [{title}](./{folder}/README.md)\n"
+                encoded_path = encode_path_for_markdown(f"./{folder}/README.md")
+                toc_content += f"- [{title}]({encoded_path})\n"
             toc_content += "\n"
     
     # Questions by Category
@@ -101,7 +120,8 @@ def create_table_of_contents(df, base_path):
             if difficulty in by_category[category]:
                 toc_content += f"#### {difficulty}\n\n"
                 for title, folder in sorted(by_category[category][difficulty]):
-                    toc_content += f"- [{title}](./{folder}/README.md)\n"
+                    encoded_path = encode_path_for_markdown(f"./{folder}/README.md")
+                    toc_content += f"- [{title}]({encoded_path})\n"
                 toc_content += "\n"
     
     # Write README.md
