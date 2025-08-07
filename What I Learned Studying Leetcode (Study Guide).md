@@ -3,6 +3,7 @@
 
 ## What I Learned Studying Leetcode (Page 1)
 #### By Adam Kravitz
+Note: Sections 1-18 written by Adam Kravitz, Sections 18+ written with the help of an LLM
 
 
 ### Recursion

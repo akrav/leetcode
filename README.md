@@ -1,5 +1,7 @@
 # LeetCode Questions
 
+After solving over 200 LeetCode problems, I decided to write a guide to summarize what I've learned. This guide is my interpretation of how to approach and understand LeetCode problems, and it's primarily aimed at beginner to intermediate programmers who are already familiar with basic data structures. You can check out my [Study Guide](./What%20I%20Learned%20Studying%20Leetcode%20(Study%20Guide).md).
+
 ## Questions by Difficulty
 
 ### Easy
